@@ -1,0 +1,14 @@
+---
+title: Ansible for DevOps
+subtitle: Server and Configuration Management for Humans
+author: Jeff Geerling
+titlepage: true
+titlepage-color: "E3342F"
+titlepage-text-color: "FFFFFF"
+titlepage-rule-color: "FFFFFF"
+titlepage-logo: "cover.png"
+logo-width: 150mm
+page-background: false
+toc: true
+toc-own-page: true
+---

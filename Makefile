@@ -24,12 +24,13 @@ MD_FILES := frontmatter.txt \
             backmatter.txt \
             appendix-a.txt \
             appendix-b.txt
+COVER_IMAGE := images/title_page.jpg
 PDF_OUTPUT := ansible-for-devops.pdf
 EPUB_OUTPUT := ansible-for-devops.epub
 PANDOC := pandoc
 PANDOC_FLAGS := --from=markdown --toc --toc-depth=2
-LATEX_FLAGS := --pdf-engine=xelatex
-EPUB_FLAGS := --metadata title="Ansible for DevOps"
+LATEX_FLAGS := --pdf-engine=xelatex --template=eisvogel.tex
+EPUB_FLAGS := --metadata title="Ansible for DevOps" --metadata author="Jeff Geerling" --epub-cover-image=$(COVER_IMAGE)
 
 # Default target
 all: pdf epub
