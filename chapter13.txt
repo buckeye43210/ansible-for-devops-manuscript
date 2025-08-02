@@ -52,15 +52,15 @@ As an extremely basic example, here are two of the ways I normally use debug whi
 
   tasks:
     - name: Register the output of the 'uptime' command.
-      command: uptime
+      ansible.builtin.command: uptime
       register: system_uptime
 
     - name: Print the registered output of the 'uptime' command.
-      debug:
+      ansible.builtin.debug:
         var: system_uptime.stdout
 
     - name: Print a message if a command resulted in a change.
-      debug:
+      ansible.builtin.debug:
         msg: "Command resulted in a change!"
       when: system_uptime is changed
 ```
@@ -111,16 +111,16 @@ Both `fail` and `assert`, when triggered, will abort the playbook run, and the m
 
   tasks:
     - name: Fail if conditions warrant a failure.
-      fail:
+      ansible.builtin.fail:
         msg: "There was an epic failure."
       when: should_fail_via_fail
 
     - name: Stop playbook if an assertion isn't validated.
-      assert:
+      ansible.builtin.assert:
         that: "should_fail_via_assert != true"
 
     - name: Assertions can have contain conditions.
-      assert:
+      ansible.builtin.assert:
         that:
           - should_fail_via_fail != true
           - should_fail_via_assert != true
@@ -163,11 +163,11 @@ Let's build an example playbook, and lint it to see if there are any errors:
 
   tasks:
     - name: Register the output of the 'uptime' command.
-      command: uptime 
+      ansible.builtin.command: uptime 
       register: system_uptime # comment
 
     - name: Print the registered output of the 'uptime' command.
-      debug:
+      ansible.builtin.debug:
        var: system_uptime.stdout
 
 ```
@@ -238,11 +238,11 @@ Let's take the following playbook, for example (called `main.yml`):
   connection: local
 
   tasks:
-    - shell: uptime
+    - ansible.builtin.shell: uptime
       register: system_uptime
 
     - name: Print the registered output of the 'uptime' command.
-      debug:
+      ansible.builtin.debug:
         var: system_uptime.stdout
 ```
 
@@ -759,7 +759,7 @@ Finally, we come to the meat of the workflow job, the `steps` that run once the 
           python-version: '3.x'
 
       - name: Install test dependencies.
-        run: pip3 install ansible molecule molecule-plugins[docker] yamllint ansible-lint
+        run: pip3 install ansible-core molecule molecule-plugins[docker] yamllint ansible-lint
 
       - name: Run Molecule tests.
         run: molecule test
