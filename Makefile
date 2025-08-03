@@ -1,36 +1,48 @@
-# Defining variables
-# Defining variables
-MD_FILES := frontmatter.txt \
-            foreword.txt \
-            preface.txt \
-            introduction.txt \
-            mainmatter.txt \
-            chapter1.txt \
-            chapter2.txt \
-            chapter3.txt \
-            chapter4.txt \
-            chapter5.txt \
-            chapter6.txt \
-            chapter7.txt \
-            chapter8.txt \
-            chapter9.txt \
-            chapter10.txt \
-            chapter11.txt \
-            chapter12.txt \
-            chapter13.txt \
-            chapter14.txt \
-            chapter15.txt \
-            afterword.txt \
-            backmatter.txt \
-            appendix-a.txt \
-            appendix-b.txt
-COVER_IMAGE := images/title_page.jpg
-PDF_OUTPUT := ansible-for-devops.pdf
-EPUB_OUTPUT := ansible-for-devops.epub
-PANDOC := pandoc
-PANDOC_FLAGS := --from=markdown --toc --toc-depth=2
-LATEX_FLAGS := --pdf-engine=xelatex --template=eisvogel.latex
-EPUB_FLAGS := --metadata title="Ansible for DevOps" --metadata author="Jeff Geerling" --epub-cover-image=$(COVER_IMAGE)
+#Defining variables
+MD_FILES     :=   frontmatter.txt \
+                  foreword.txt \
+                  preface.txt \
+                  introduction.txt \
+                  mainmatter.txt \
+                  chapter1.txt \
+                  chapter2.txt \
+                  chapter3.txt \
+                  chapter4.txt \
+                  chapter5.txt \
+                  chapter6.txt \
+                  chapter7.txt \
+                  chapter8.txt \
+                  chapter9.txt \
+                  chapter10.txt \
+                  chapter11.txt \
+                  chapter12.txt \
+                  chapter13.txt \
+                  chapter13A.txt \
+                  chapter13B.txt \
+                  chapter14.txt \
+                  chapter15.txt \
+                  afterword.txt \
+                  backmatter.txt \
+                  appendix-a.txt \
+                  appendix-b.txt
+
+COVER_IMAGE  :=   images/cover_art.jpg
+COVER_HEADER :=   cover_header.tex
+COVER_BODY   :=   cover_body.tex
+PDF_OUTPUT   :=   ansible-for-devops.pdf
+EPUB_OUTPUT  :=   ansible-for-devops.epub
+PANDOC       :=   pandoc
+PANDOC_FLAGS := --from=markdown \
+                --toc \
+                --toc-depth=2 \
+                --metadata title="Ansible for DevOps" \
+                --metadata author="Jeff Geerling"
+LATEX_FLAGS  := --pdf-engine=xelatex \
+                --include-in-header=$(COVER_HEADER) \
+                --include-before-body=$(COVER_BODY) \
+                --template=eisvogel.latex
+EPUB_FLAGS   := --epub-cover-image=$(COVER_IMAGE) \
+                # --css=epub.css
 
 # Default target
 all: pdf epub

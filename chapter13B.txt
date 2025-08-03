@@ -1,0 +1,485 @@
+# Chapter 13B: Ansible Test-Driven Development Using Molecule and Goss
+
+Test-Driven Development (TDD) ensures that Ansible playbooks produce reliable, predictable infrastructure by writing tests before implementation.
+Using **Molecule** for test environments and **Goss** for lightweight, YAML-based validation, you can create a robust TDD workflow for infrastructure as code.
+This chapter covers the TDD process, setting up Molecule with Goss, using a `prepare.yml` playbook to install Goss in the test environment, and iteratively developing a secure SSH playbook.
+We’ll also address installing Goss and where to place its components, using Fully Qualified Collection Names (FQCNs) for all Ansible modules to align with modern best practices.
+
+## Why TDD for Ansible Playbooks?
+
+TDD brings discipline to Ansible development by:
+- **Defining Intent**: Tests specify the desired system state upfront.
+- **Catching Errors Early**: Failures are detected as soon as code is written.
+- **Enabling Refactoring**: A test suite provides confidence to improve code.
+- **Documenting Infrastructure**: Goss tests serve as clear, living documentation.
+
+Goss is a declarative server validation tool designed to test system configuration state quickly and efficiently. 
+Its simplicity and alignment with Ansible’s declarative style make it ideal for DevOps workflows.
+Molecule and Goss together offer a lightweight, declarative testing framework that aligns with Ansible’s philosophy.
+
+## Understanding the TDD Workflow
+
+The TDD cycle follows the **Red, Green, Refactor** pattern:
+1. **Red**: Write a failing test defining the desired system state.
+2. **Green**: Write minimal Ansible code to pass the test.
+3. **Refactor**: Improve the code while ensuring tests pass.
+
+We’ll apply this to a playbook configuring a secure SSH server, using Molecule and Goss.
+
+## Setting Up Your Environment
+
+Ensure the following prerequisites are installed:
+- **Ansible**: Version 2.10 or higher (to support FQCNs).
+- **Molecule**: Version 3.0 or higher (`pip install molecule`).
+- **Docker**: Or another Molecule driver (e.g., Podman).
+- **Python**: For Molecule and its dependencies.
+- **Goss Plugin**: The `molecule-goss` plugin for Molecule integration.
+
+### Installing the Goss Plugin
+
+The `molecule-goss` plugin enables Goss as a Molecule verifier. Install it in your Python environment:
+
+```bash
+pip install molecule-goss
+```
+
+- **Where the Plugin Resides**:
+  - Installed in your Python environment’s `site-packages` directory:
+    - Virtual environment: `<venv>/lib/pythonX.X/site-packages/molecule_goss/`.
+    - Global: `/usr/local/lib/pythonX.X/dist-packages/molecule_goss/` (or equivalent).
+  - No manual placement is needed; pip manages it.
+  - Verify with:
+    ```bash
+    pip show molecule-goss
+    ```
+
+- **Best Practice**: Use a virtual environment and pin the version in `requirements.txt` (e.g., `molecule-goss==0.2.0`).
+
+### Installing the Goss Binary
+
+Goss is a Go-based binary required for Molecule to run tests. It is not typically available in standard Ubuntu, Debian, or RPM-based repositories (e.g., CentOS, Fedora) but may possibly be installed via `apt` from some Debian repositories.
+
+- **Option 1: Install via `apt` (Debian Sid)**:
+  Configure the repository in `/etc/apt/sources.list`:
+  ```bash
+  deb http://deb.debian.org/debian sid main
+  ```
+  Then:
+  ```bash
+  sudo apt update
+  sudo apt install goss
+  ```
+  This installs the `goss` binary to `/usr/bin/goss`.
+  **Warning**: The "sid" repository is unstable and may cause package conflicts; use cautiously in test environments.
+
+- **Option 2: Install via Curl (Recommended)**:
+  Download the binary:
+  ```bash
+  curl -L https://github.com/goss-org/goss/releases/latest/download/goss-linux-amd64 -o /usr/local/bin/goss
+  chmod +rx /usr/local/bin/goss
+  ```
+  Optionally, install `dgoss` for Docker:
+  ```bash
+  curl -L https://github.com/goss-org/goss/releases/latest/download/dgoss -o /usr/local/bin/dgoss
+  chmod +rx /usr/local/bin/dgoss
+  ```
+  The binary is placed in `/usr/local/bin/goss`.
+
+- **Where the Binary Resides**:
+  - Via `apt`: `/usr/bin/goss`.
+  - Via curl: `/usr/local/bin/goss` (or specified directory).
+  - The `molecule-goss` plugin may download its own Goss binary if not found, ensuring tests run.
+
+- **Verification**:
+  ```bash
+  goss --version
+  ```
+
+## Creating a Molecule Scenario
+
+Create a project directory for a secure SSH playbook:
+
+```bash
+mkdir ssh-config && cd ssh-config
+```
+
+Initialize a Molecule scenario:
+
+```bash
+molecule init scenario --driver-name podman
+```
+
+Edit `molecule/default/molecule.yml` to use Goss and reference a `prepare.yml` playbook:
+
+```
+---
+dependency:
+  name: galaxy
+driver:
+  name: podman
+platforms:
+  - name: instance
+    image: ubuntu:20.04
+    pre_build_image: true
+provisioner:
+  name: ansible
+  playbooks:
+    prepare: ../../prepare.yml
+    converge: ../../playbook.yml
+verifier:
+  name: goss
+  enabled: true
+```<xaiArtifact artifact_id="094772b0-7b86-4abe-a81c-2d85ab620571" artifact_version_id="f197f4e3-76f8-4b3c-a70f-fe44fffcdfb8" title="molecule.yml" contentType="text/yaml">
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: instance
+    image: ubuntu:20.04
+    pre_build_image: true
+provisioner:
+  name: ansible
+  playbooks:
+    prepare: ../../prepare.yml
+    converge: ../../playbook.yml
+verifier:
+  name: goss
+  enabled: true
+</xaiArtifact>```yaml
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: instance
+    image: ubuntu:20.04
+    pre_build_image: true
+provisioner:
+  name: ansible
+  playbooks:
+    prepare: ../../prepare.yml
+    converge: ../../playbook.yml
+verifier:
+  name: goss
+  enabled: true
+```
+
+- **Key Configurations**:
+  - `provisioner.playbooks.prepare`: Points to `prepare.yml` for environment setup.
+  - `provisioner.playbooks.converge`: Points to `playbook.yml` for the main playbook.
+  - `verifier.name: goss`: Uses the `molecule-goss` plugin.
+  - `platforms`: Tests on Ubuntu 20.04.
+
+### Where to Place Goss Test Files
+
+Goss test files reside in `molecule/default/tests/`:
+- **Path**: `ssh-config/molecule/default/tests/goss.yml`
+- **Purpose**: Molecule runs tests from this directory during `molecule test`.
+- **Multiple Files**: List additional files in `molecule.yml`:
+  ```yaml
+  verifier:
+    name: goss
+    enabled: true
+    options:
+      tests:
+        - tests/goss_packages.yml
+        - tests/goss_config.yml
+  ```
+
+## Using prepare.yml to Install Goss
+
+To ensure the Goss binary is available in the Molecule test environment (e.g., Podman or Docker container), use a `prepare.yml` playbook to install it before running tests.
+This ensures consistency, especially when using `apt` from the Debian "sid" repository or falling back to downloading the binary.
+
+Create `ssh-config/prepare.yml`:
+
+```yaml
+---
+- name: Prepare test environment for Goss
+  hosts: all
+  become: yes
+  tasks:
+    - name: Add Debian sid repository for Goss
+      ansible.builtin.apt_repository:
+        repo: deb http://deb.debian.org/debian sid main
+        state: present
+        update_cache: yes
+      when: ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian'
+
+    - name: Install Goss via apt (Debian sid)
+      ansible.builtin.apt:
+        name: goss
+        state: present
+      when: ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian'
+      register: apt_goss
+      failed_when: apt_goss.failed and 'Unable to find goss' not in apt_goss.msg
+
+    - name: Install Goss via curl (fallback)
+      when: apt_goss is skipped or apt_goss.failed
+      block:
+        - name: Download Goss binary
+          ansible.builtin.get_url:
+            url: https://github.com/goss-org/goss/releases/latest/download/goss-linux-amd64
+            dest: /usr/local/bin/goss
+            mode: '0755'
+
+        - name: Verify Goss installation
+          ansible.builtin.command:
+            cmd: /usr/local/bin/goss --version
+          changed_when: false
+```
+
+- **Explanation**:
+  - **Add Debian Sid Repository**: Uses `ansible.builtin.apt_repository` to add the "sid" repository.
+  - **Install via `apt`**: Uses `ansible.builtin.apt` to install the `goss` package, handling cases where it’s unavailable.
+  - **Fallback to Curl**: Uses `ansible.builtin.get_url` to download the Goss binary if `apt` fails.
+  - **Verification**: Uses `ansible.builtin.command` to verify Goss installation.
+  - **Placement**: The `prepare.yml` file is placed in the project root (`ssh-config/prepare.yml`), referenced in `molecule.yml`.
+
+## TDD in Action: Building a Secure SSH Playbook
+
+Develop a playbook for a secure SSH server with:
+- `openssh-server` installed.
+- SSH service running and enabled.
+- A custom `sshd_config` disabling root login and password authentication.
+- Port 22 listening.
+
+### Step 1: Write a Failing Test (Red)
+
+Create `molecule/default/tests/goss.yml`:
+
+```yaml
+package:
+  openssh-server:
+    installed: true
+service:
+  ssh:
+    enabled: true
+    running: true
+port:
+  tcp:22:
+    listening: true
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    mode: "0644"
+    owner: root
+    group: root
+    contains:
+      - "Protocol 2"
+      - "PermitRootLogin no"
+      - "PasswordAuthentication no"
+```
+
+Run `molecule test`. The `prepare.yml` playbook installs Goss, but tests fail since no playbook exists (Red phase).
+
+### Step 2: Write Minimal Code to Pass Tests (Green)
+
+Create `playbook.yml` in `ssh-config/`:
+
+```yaml
+---
+- name: Configure secure SSH server
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install openssh-server
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure SSH service is running and enabled
+      ansible.builtin.service:
+        name: ssh
+        state: started
+        enabled: yes
+
+    - name: Configure sshd_config
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config
+        content: |
+          Protocol 2
+          PermitRootLogin no
+          PasswordAuthentication no
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart SSH
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+```
+
+Run `molecule test`. Tests should pass (Green phase).
+
+### Step 3: Refactor
+
+Refactor using a template. Create `templates/sshd_config.j2`:
+
+
+Protocol 2
+PermitRootLogin no
+PasswordAuthentication no
+
+
+Update `playbook.yml`:
+
+```yaml
+---
+- name: Configure secure SSH server
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install openssh-server
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure SSH service is running and enabled
+      ansible.builtin.service:
+        name: ssh
+        state: started
+        enabled: yes
+
+    - name: Configure sshd_config
+      ansible.builtin.template:
+        src: sshd_config.j2
+        dest: /etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart SSH
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+```
+
+Create `ssh-config/templates/` and place `sshd_config.j2` there. Run `molecule test` to confirm tests pass.
+
+### Iterating with TDD
+
+Add a non-standard SSH port (2222). Update `goss.yml`:
+
+```yaml
+package:
+  openssh-server:
+    installed: true
+service:
+  ssh:
+    enabled: true
+    running: true
+port:
+  tcp:2222:
+    listening: true
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    mode: "0644"
+    owner: root
+    group: root
+    contains:
+      - "Protocol 2"
+      - "PermitRootLogin no"
+      - "PasswordAuthentication no"
+      - "Port 2222"
+```
+
+Run `molecule test` (Red). Update `sshd_config.j2`:
+
+
+Protocol 2
+PermitRootLogin no
+PasswordAuthentication no
+Port 2222
+
+
+Run `molecule test` (Green). Refactor if needed, e.g., using variables for the port.
+
+## Advanced Goss Testing
+
+Enhance `goss.yml` with:
+- **Directory Permissions**:
+  ```yaml
+  file:
+    /etc/ssh:
+      exists: true
+      mode: "0755"
+      owner: root
+      group: root
+  ```
+- **Command Output**:
+  ```yaml
+  command:
+    "sshd -t":
+      exit-status: 0
+  ```
+- **Platform-Specific Tests**:
+  ```yaml
+  package:
+    openssh-server:
+      installed: true
+      skip: "{{ ansible_distribution != 'Ubuntu' }}"
+  ```
+
+## Debugging Failed Tests
+
+- **Converge Mode**: `molecule converge` to provision without cleanup.
+- **Log into Container**: `molecule login`.
+- **Run Goss Manually**:
+  ```bash
+  /usr/bin/goss -g /molecule/default/tests/goss.yml validate --format documentation
+  ```
+
+## Best Practices
+
+- **Test Placement**: Store Goss tests in `molecule/default/tests/`.
+- **Prepare Environment**: Use `prepare.yml` to install Goss reliably.
+- **Focused Tests**: Validate critical states only.
+- **Multi-Platform**: Test on multiple distributions in `molecule.yml`.
+- **CI/CD**: Automate with GitHub Actions:
+  ```yaml
+  name: Test Ansible Playbook
+  on: [push, pull_request]
+  jobs:
+    test:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+        - name: Set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: '3.9'
+        - name: Install dependencies
+          run: |
+            pip install ansible molecule molecule-goss docker
+        - name: Run Molecule tests
+          run: |
+            cd ssh-config
+            molecule test
+  ```
+
+## Conclusion
+
+TDD with Molecule and Goss ensures reliable Ansible playbooks.
+The `molecule-goss` plugin, installed via pip, and Goss test files in `molecule/default/tests/` enable declarative testing.
+Using `prepare.yml` to install Goss via `apt` or curl ensures test environment consistency.
+This chapter demonstrated TDD with a secure SSH playbook, applying the Red-Green-Refactor cycle with FQCNs for modern Ansible compatibility.
+Adopt these practices for robust infrastructure code.
+
+### Exercises
+
+1. Add a Goss test for SSH key-based authentication and update the playbook.
+2. Test the playbook on CentOS, adjusting Goss tests and `prepare.yml`.
+3. Integrate tests into a GitLab or Jenkins pipeline.
+4. Use Ansible variables for a configurable SSH port and test with Goss.

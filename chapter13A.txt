@@ -1,0 +1,332 @@
+# Chapter 13A: Ansible Testing with Molecule and Goss
+
+In the world of infrastructure as code, ensuring that your Ansible roles produce the desired system state is critical.
+**Molecule** provides a robust framework for testing Ansible roles, and choosing the right test tool can make your tests
+more efficient and readable. In this chapter, we’ll explore **Goss**, a lightweight, YAML-based server testing tool,
+and show how to integrate it with Molecule to validate your Ansible roles.
+We’ll cover why Goss is an excellent choice, how to install and configure the Goss plugin, where to place test files,
+and how to write effective tests for your infrastructure.
+
+## Why Goss?
+
+Goss is a declarative language server validation tool designed to test system configuration state quickly and efficiently.
+Its simplicity and alignment with Ansible’s declarative style make it ideal for DevOps workflows.
+Key benefits include:
+
+- **Lightweight and Fast**: Written in Go, Goss compiles to a single binary and executes tests in milliseconds.
+- **Human-Readable Tests**: Tests are defined in YAML, mirroring Ansible’s declarative syntax.
+- **Flexible Assertions**: Goss supports testing files, services, packages, ports, users, groups, and more, covering most infrastructure testing needs.
+- **Molecule Integration**: Molecule natively supports Goss as a verifier, enabling seamless integration into your Ansible testing pipeline.
+
+By combining Goss with Molecule, you can create robust, repeatable tests to ensure your Ansible roles configure systems correctly across environments.
+
+## Setting Up Your Environment
+
+Before using Goss with Molecule, ensure you have the following prerequisites installed:
+
+- **Ansible**: Version 2.9 or higher.
+- **Molecule**: Version 3.0 or higher (install via `pip install molecule`).
+- **Docker** or another supported driver (e.g., Podman) for Molecule’s test environments.
+- **Python**: For running Molecule and its dependencies.
+- **Goss Plugin**: The `molecule-goss` plugin, which enables Goss as a Molecule verifier.
+
+### Installing the Goss Plugin
+
+The `molecule-goss` plugin is a Python package that integrates Goss with Molecule. Here’s how to install it and where it resides:
+
+- **Install via pip**:
+  Run the following command to install the plugin in your Python environment:
+
+  ```bash
+  pip install molecule-goss
+  ```
+
+- **Where the Plugin Resides**:
+  - The `molecule-goss` plugin is installed in your Python environment’s package directory (e.g., `site-packages`). For example:
+    - In a virtual environment: `<venv>/lib/pythonX.X/site-packages/molecule_goss/`.
+    - Globally: `/usr/local/lib/pythonX.X/dist-packages/molecule_goss/` (or equivalent, depending on your system).
+  - You don’t need to manually place or manage the plugin files; pip handles this automatically.
+  - To verify installation, run:
+
+    ```bash
+    pip show molecule-goss
+    ```
+
+    This displays details like the version and installation path.
+
+- **Best Practice**:
+  - Install `molecule-goss` in a Python virtual environment to avoid conflicts with system-wide packages.
+  - Pin the version in a `requirements.txt` file (e.g., `molecule-goss==0.2.0`) for consistency in CI/CD pipelines.
+
+## Configuring Molecule with Goss
+
+Molecule organizes tests within an Ansible role’s directory structure. Let’s assume you have a role called `webserver` that configures an Nginx web server.
+If you don’t have a Molecule scenario, initialize one:
+
+```bash
+cd roles/webserver
+molecule init scenario --driver-name podman
+```
+
+This creates a `molecule/default` directory with configuration files.
+To use Goss as the verifier, you need to configure the `molecule.yml` file and place Goss test files in the correct location.
+
+### Updating `molecule.yml`
+
+Edit `molecule/default/molecule.yml` to specify Goss as the verifier:
+
+```yaml
+---
+dependency:
+  name: galaxy
+driver:
+  name: podman
+platforms:
+  - name: instance
+    image: ubuntu:20.04
+    pre_build_image: true
+provisioner:
+  name: ansible
+verifier:
+  name: goss
+  enabled: true
+```
+
+**Explanation**:
+- `verifier.name: goss`: Sets Goss as the test verifier, leveraging the `molecule-goss` plugin.
+- `verifier.enabled: true`: Ensures the verifier runs during the test phase.
+- `platforms`: Defines the test environment (e.g., a Docker container running Ubuntu 20.04).
+   Adjust the image to match your target environment (e.g., `rocky:9`).
+
+### Where to Place Goss Test Files
+
+Goss test files (e.g., `goss.yml`) must be placed in the `molecule/default/tests/` directory of your role. For example:
+
+- **Path**: `roles/webserver/molecule/default/tests/goss.yml`
+- **Purpose**: Molecule looks for Goss test files in this directory when running the `molecule test` command.
+- **Multiple Test Files**: If you have multiple test files (e.g., `goss_packages.yml`, `goss_services.yml`),
+  list them in `molecule.yml`:
+
+  ```yaml
+  verifier:
+    name: goss
+    enabled: true
+    options:
+      tests:
+        - tests/goss_packages.yml
+        - tests/goss_services.yml
+  ```
+
+The `molecule-goss` plugin automatically handles downloading or using the Goss binary during test execution,
+so you don’t need to manually place the Goss binary in your project.
+
+## Writing Goss Tests
+
+Goss tests are defined in YAML files, typically named `goss.yml`, where you specify the desired system state.
+Let’s create tests for the `webserver` role to validate Nginx installation, service status, and a webpage.
+
+Create `molecule/default/tests/goss.yml` with:
+
+```yaml
+package:
+  nginx:
+    installed: true
+service:
+  nginx:
+    enabled: true
+    running: true
+port:
+  tcp:80:
+    listening: true
+file:
+  /var/www/html/index.html:
+    exists: true
+    mode: "0644"
+    owner: www-data
+    group: www-data
+    contains:
+      - "Welcome to Nginx"
+http:
+  http://localhost:
+    status: 200
+    body:
+      - "Welcome to Nginx"
+```
+
+This test verifies that:
+- The `nginx` package is installed.
+- The `nginx` service is enabled and running.
+- Port 80 is listening.
+- The file `/var/www/html/index.html` exists with correct permissions and content.
+- A GET request to `http://localhost` returns a 200 status code with expected content.
+
+## Creating the Ansible Role
+
+To make this example complete, create a minimal `webserver` role that satisfies these tests.
+In `roles/webserver/tasks/main.yml`, add:
+
+```yaml
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure Nginx is running and enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  become: true
+
+- name: Copy index.html
+  ansible.builtin.copy:
+    content: "Welcome to Nginx\n"
+    dest: /var/www/html/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  become: true
+```
+
+This playbook installs Nginx, ensures it’s running, and creates a simple `index.html` file.
+
+## Running Molecule with Goss
+
+With the role, `molecule.yml`, and Goss tests in place, run:
+
+```bash
+molecule test
+```
+
+This command:
+1. Creates a Docker container (Ubuntu 20.04, per `molecule.yml`).
+2. Provisions the container with the `webserver` role.
+3. Runs the Goss tests in `molecule/default/tests/goss.yml`.
+4. Destroys the container.
+
+If tests pass, you’ll see a success message.
+If they fail, Goss provides detailed feedback on mismatched assertions.
+
+## Advanced Goss Testing
+
+Goss supports a variety of test types for complex configurations.
+Here are some advanced examples for `goss.yml`:
+
+### Testing Users and Groups
+
+```yaml
+user:
+  myapp:
+    exists: true
+    groups:
+      - www-data
+group:
+  myapp:
+    exists: true
+```
+
+### Validating File Content with Regular Expressions
+
+```yaml
+file:
+  /etc/nginx/nginx.conf:
+    exists: true
+    contains:
+      - "/server_name localhost;/"
+```
+
+### Testing Command Output
+
+```yaml
+command:
+  "curl -s http://localhost":
+    exit-status: 0
+    stdout:
+      - "Welcome to Nginx"
+```
+
+### Skipping Tests Conditionally
+
+```yaml
+package:
+  nginx:
+    installed: true
+    skip: "{{ ansible_distribution != 'Ubuntu' }}"
+```
+
+## Debugging Failed Tests
+
+If a test fails, Molecule displays Goss’s output, highlighting failed assertions. To debug:
+
+- **Run Molecule in Converge Mode**:
+  ```bash
+  molecule converge
+  ```
+  Provisions the environment without destroying it.
+
+- **Log into the Container**:
+  ```bash
+  molecule login
+  ```
+  Inspect the container manually.
+
+- **Run Goss Manually**:
+  Inside the container, download the Goss binary and validate tests:
+  ```bash
+  curl -L https://github.com/aelsabbahy/goss/releases/latest/download/goss-linux-amd64 -o /tmp/goss
+  chmod +x /tmp/goss
+  /tmp/goss -g /molecule/default/tests/goss.yml validate --format documentation
+  ```
+
+## Best Practices for Goss and Molecule
+
+- **Test File Organization**: Keep Goss test files in `molecule/default/tests/`.
+  Use multiple files for clarity (e.g., `goss_packages.yml`, `goss_services.yml`) and reference them in `molecule.yml`.
+- **Multi-Platform Testing**: Test your role on multiple platforms (e.g., Ubuntu, Debian, Rocky) by defining additional `platforms` in `molecule.yml`.
+- **Use Variables**: Leverage Goss variables (e.g., `{{ .Env.HOSTNAME }}`) for dynamic tests.
+- **Virtual Environment**: Install `molecule-goss` in a virtual environment to avoid dependency conflicts.
+- **CI/CD Integration**: Automate tests in your CI/CD pipeline (e.g., GitHub Actions) for continuous validation.
+
+## Integrating with CI/CD
+
+Add a GitHub Actions workflow (`.github/workflows/test.yml`) to run Molecule tests:
+
+```yaml
+name: Test Ansible Role
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          pip install ansible molecule molecule-goss docker
+      - name: Run Molecule tests
+        run: |
+          cd roles/webserver
+          molecule test
+```
+
+## Conclusion
+
+Goss, paired with Molecule, offers a lightweight and declarative way to test Ansible roles.
+By installing the `molecule-goss` plugin via pip and placing test files in `molecule/default/tests/`,
+you can validate your infrastructure with precision. This chapter covered setting up the Goss plugin,
+writing tests, and integrating them into your workflow.
+Experiment with Goss’s advanced features and Molecule’s multi-platform testing to ensure robust, portable roles.
+
+### Exercises
+
+1. Extend the `webserver` role to configure a custom Nginx virtual host and write Goss tests to validate its configuration.
+2. Test the `webserver` role on both Ubuntu and CentOS, updating Goss tests for platform-specific differences.
+3. Integrate the role’s tests into a CI/CD pipeline using GitLab or Jenkins.
+4. Write a Goss test to validate a custom user and group, ensuring correct permissions on a directory.
+
