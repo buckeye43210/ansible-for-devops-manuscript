@@ -1,6 +1,6 @@
 # Ansible for DevOps - Manuscript
 
-[![Ansible for DevOps Cover](images/cover_art.pdf)
+[![Ansible for DevOps Cover](images/title_page.jpg)
 
 Buy [Ansible for DevOps](https://www.ansiblefordevops.com/) for your e-reader or in paperback format.
 
